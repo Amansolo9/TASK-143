@@ -1,0 +1,53 @@
+FROM eclipse-temurin:17-jdk
+
+ENV ANDROID_HOME=/opt/android-sdk
+ENV ANDROID_SDK_ROOT=/opt/android-sdk
+ENV PATH="${PATH}:${ANDROID_HOME}/cmdline-tools/latest/bin:${ANDROID_HOME}/platform-tools:/opt/gradle-8.5/bin"
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    wget \
+    unzip \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Gradle 8.5
+RUN wget -q "https://services.gradle.org/distributions/gradle-8.5-bin.zip" -O /tmp/gradle.zip && \
+    unzip -q /tmp/gradle.zip -d /opt && \
+    rm /tmp/gradle.zip && \
+    gradle --version
+
+# Generate Gradle wrapper jar in an empty temp project (avoids classpath resolution)
+RUN mkdir -p /tmp/wrapper-gen && \
+    cd /tmp/wrapper-gen && \
+    touch settings.gradle && \
+    gradle wrapper --gradle-version 8.5 --no-daemon && \
+    ls -la gradle/wrapper/gradle-wrapper.jar
+
+# Download and install Android command-line tools
+RUN mkdir -p ${ANDROID_HOME}/cmdline-tools && \
+    wget -q "https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip" -O /tmp/cmdline-tools.zip && \
+    unzip -q /tmp/cmdline-tools.zip -d ${ANDROID_HOME}/cmdline-tools && \
+    mv ${ANDROID_HOME}/cmdline-tools/cmdline-tools ${ANDROID_HOME}/cmdline-tools/latest && \
+    rm /tmp/cmdline-tools.zip
+
+# Accept licenses and install required SDK packages
+RUN yes | sdkmanager --licenses > /dev/null 2>&1 && \
+    sdkmanager \
+    "platforms;android-34" \
+    "build-tools;34.0.0" \
+    "platform-tools"
+
+WORKDIR /app
+
+# Copy everything
+COPY . .
+
+# Place the pre-generated wrapper jar
+RUN mkdir -p gradle/wrapper && \
+    cp /tmp/wrapper-gen/gradle/wrapper/gradle-wrapper.jar gradle/wrapper/gradle-wrapper.jar
+RUN chmod +x gradlew
+
+# Generate local.properties from ANDROID_HOME
+RUN echo "sdk.dir=${ANDROID_HOME}" > local.properties
+
+# Run unit tests
+CMD ["./gradlew", "testDebugUnitTest", "--no-daemon", "--stacktrace"]
