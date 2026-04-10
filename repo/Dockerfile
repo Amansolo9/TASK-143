@@ -67,7 +67,8 @@ RUN chmod +x gradlew
 # Generate local.properties from ANDROID_HOME (not committed to repo)
 RUN echo "sdk.dir=${ANDROID_HOME}" > local.properties
 
-# Build the debug APK
+# Build the debug APK (increase memory for Kotlin compiler in container)
+ENV GRADLE_OPTS="-Xmx4096m"
 RUN ./gradlew assembleDebug --no-daemon --stacktrace
 
 # Output stage
