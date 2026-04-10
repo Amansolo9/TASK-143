@@ -49,8 +49,5 @@ RUN chmod +x gradlew
 # Generate local.properties from ANDROID_HOME
 RUN echo "sdk.dir=${ANDROID_HOME}" > local.properties
 
-# Increase memory for Kotlin compiler in container
-ENV GRADLE_OPTS="-Xmx4096m"
-
-# Run unit tests
-CMD ["./gradlew", "testDebugUnitTest", "--no-daemon", "--stacktrace"]
+# Run unit tests (in-process Kotlin compilation to avoid OOM in constrained containers)
+CMD ["./gradlew", "testDebugUnitTest", "--no-daemon", "--stacktrace", "-Dkotlin.compiler.execution.strategy=in-process"]

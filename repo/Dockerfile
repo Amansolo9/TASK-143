@@ -67,9 +67,9 @@ RUN chmod +x gradlew
 # Generate local.properties from ANDROID_HOME (not committed to repo)
 RUN echo "sdk.dir=${ANDROID_HOME}" > local.properties
 
-# Build the debug APK (increase memory for Kotlin compiler in container)
-ENV GRADLE_OPTS="-Xmx4096m"
-RUN ./gradlew assembleDebug --no-daemon --stacktrace
+# Build the debug APK
+# Kotlin compiles in-process (no daemon) to avoid OOM in constrained containers
+RUN ./gradlew assembleDebug --no-daemon --stacktrace -Dkotlin.compiler.execution.strategy=in-process
 
 # Output stage
 FROM eclipse-temurin:17-jre-alpine AS output
