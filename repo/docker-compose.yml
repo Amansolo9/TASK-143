@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   learnmart-build:
     build:
@@ -9,14 +7,5 @@ services:
     volumes:
       - build-output:/output
 
-  learnmart-test:
-    build:
-      context: .
-      dockerfile: Dockerfile.test
-    container_name: learnmart-tester
-    volumes:
-      - test-results:/app/test-results
-
 volumes:
   build-output:
-  test-results:
