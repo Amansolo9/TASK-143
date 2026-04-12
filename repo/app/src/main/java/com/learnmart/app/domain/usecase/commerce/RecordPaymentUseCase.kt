@@ -1,7 +1,6 @@
 package com.learnmart.app.domain.usecase.commerce
 
-import androidx.room.withTransaction
-import com.learnmart.app.data.local.LearnMartRoomDatabase
+import com.learnmart.app.data.local.TransactionRunner
 import com.learnmart.app.domain.model.*
 import com.learnmart.app.domain.repository.AuditRepository
 import com.learnmart.app.domain.repository.OrderRepository
@@ -28,7 +27,7 @@ class RecordPaymentUseCase @Inject constructor(
     private val auditRepository: AuditRepository,
     private val checkPermission: CheckPermissionUseCase,
     private val sessionManager: SessionManager,
-    private val database: LearnMartRoomDatabase
+    private val transactionRunner: TransactionRunner
 ) {
     suspend operator fun invoke(request: RecordPaymentRequest): AppResult<PaymentRecord> {
         if (!checkPermission.hasPermission(Permission.PAYMENT_RECORD)) {
@@ -79,7 +78,7 @@ class RecordPaymentUseCase @Inject constructor(
 
         // All financial writes in a single transaction
         try {
-            database.withTransaction {
+            transactionRunner.runInTransaction {
                 paymentRepository.recordPayment(payment)
 
                 // Create allocation

@@ -1,7 +1,6 @@
 package com.learnmart.app.domain.usecase.operations
 
-import androidx.room.withTransaction
-import com.learnmart.app.data.local.LearnMartRoomDatabase
+import com.learnmart.app.data.local.TransactionRunner
 import com.learnmart.app.domain.model.*
 import com.learnmart.app.domain.repository.AuditRepository
 import com.learnmart.app.domain.repository.OperationsRepository
@@ -20,10 +19,18 @@ class ReconciliationUseCase @Inject constructor(
     private val auditRepository: AuditRepository,
     private val checkPermission: CheckPermissionUseCase,
     private val sessionManager: SessionManager,
-    private val database: LearnMartRoomDatabase
+    private val transactionRunner: TransactionRunner
 ) {
-    suspend fun runReconciliation(batchId: String): AppResult<ReconciliationRun> {
-        if (!checkPermission.hasPermission(Permission.PAYMENT_RECONCILE)) {
+    /**
+     * Run reconciliation for a batch. When [systemCaller] is true, permission
+     * checks are skipped (used by WorkManager-scheduled background jobs that
+     * have no interactive session). Interactive callers must leave it false.
+     */
+    suspend fun runReconciliation(
+        batchId: String,
+        systemCaller: Boolean = false
+    ): AppResult<ReconciliationRun> {
+        if (!systemCaller && !checkPermission.hasPermission(Permission.PAYMENT_RECONCILE)) {
             return AppResult.PermissionError("Requires payment.reconcile")
         }
 
@@ -78,7 +85,12 @@ class ReconciliationUseCase @Inject constructor(
                         settlementRowId = row.id, paymentRecordId = matchedPayment.id,
                         discrepancyType = "AMOUNT_MISMATCH",
                         description = "Settlement amount ${row.amount} != payment amount ${matchedPayment.amount}",
-                        notes = "", status = DiscrepancyCaseStatus.OPEN,
+                        notes = "Row external_id: ${row.externalRowId ?: "N/A"}, " +
+                            "payment_ref: $paymentRef, " +
+                            "settlement_amount: ${row.amount}, " +
+                            "payment_amount: ${matchedPayment.amount}, " +
+                            "difference: ${row.amount.subtract(matchedPayment.amount)}",
+                        status = DiscrepancyCaseStatus.OPEN,
                         resolvedBy = null, resolvedAt = null, resolutionNote = null,
                         createdBy = userId, createdAt = now, updatedAt = now
                     ))
@@ -96,7 +108,11 @@ class ReconciliationUseCase @Inject constructor(
                     id = IdGenerator.newId(), reconciliationRunId = runId,
                     settlementRowId = row.id, paymentRecordId = null,
                     discrepancyType = "UNMATCHED", description = "No matching payment found for reference: $paymentRef",
-                    notes = "", status = DiscrepancyCaseStatus.OPEN,
+                    notes = "Row external_id: ${row.externalRowId ?: "N/A"}, " +
+                        "payment_ref: $paymentRef, " +
+                        "settlement_amount: ${row.amount}, " +
+                        "tender_type: ${row.tenderType ?: "N/A"}",
+                    status = DiscrepancyCaseStatus.OPEN,
                     resolvedBy = null, resolvedAt = null, resolutionNote = null,
                     createdBy = userId, createdAt = now, updatedAt = now
                 ))
@@ -111,7 +127,7 @@ class ReconciliationUseCase @Inject constructor(
             runBy = userId, runAt = now, status = "COMPLETED"
         )
         try {
-            database.withTransaction {
+            transactionRunner.runInTransaction {
                 operationsRepository.createReconciliationRun(run)
                 if (matches.isNotEmpty()) operationsRepository.createReconciliationMatches(matches)
                 discrepancies.forEach { operationsRepository.createDiscrepancyCase(it) }

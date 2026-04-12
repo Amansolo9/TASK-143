@@ -68,11 +68,8 @@ RUN chmod +x gradlew
 RUN echo "sdk.dir=${ANDROID_HOME}" > local.properties
 
 # Build the debug APK
-# Kotlin compiles in-process (no daemon) to avoid OOM in constrained containers
 RUN ./gradlew assembleDebug --no-daemon --stacktrace -Dkotlin.compiler.execution.strategy=in-process
 
-# Output stage
-FROM eclipse-temurin:17-jre-alpine AS output
-WORKDIR /output
-COPY --from=builder /app/app/build/outputs/apk/debug/app-debug.apk ./learnmart-debug.apk
-CMD ["echo", "LearnMart build complete. APK at /output/learnmart-debug.apk"]
+# At runtime, copy the APK to the mounted /output volume
+CMD cp app/build/outputs/apk/debug/app-debug.apk /output/learnmart-debug.apk && \
+    echo "APK copied to /output/learnmart-debug.apk"

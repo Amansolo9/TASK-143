@@ -495,6 +495,11 @@ private fun RequestStatusChip(status: EnrollmentRequestStatus) {
             MaterialTheme.colorScheme.secondaryContainer,
             MaterialTheme.colorScheme.onSecondaryContainer
         )
+        EnrollmentRequestStatus.PENDING_CAPACITY_EXCEPTION -> Triple(
+            "Capacity Exception",
+            MaterialTheme.colorScheme.errorContainer,
+            MaterialTheme.colorScheme.onErrorContainer
+        )
         EnrollmentRequestStatus.WAITLISTED -> Triple(
             "Waitlisted",
             MaterialTheme.colorScheme.tertiaryContainer,

@@ -7,6 +7,7 @@ enum class EnrollmentRequestStatus {
     DRAFT,
     SUBMITTED,
     PENDING_APPROVAL,
+    PENDING_CAPACITY_EXCEPTION,
     WAITLISTED,
     OFFERED,
     APPROVED,
@@ -20,8 +21,9 @@ enum class EnrollmentRequestStatus {
 
     fun allowedTransitions(): Set<EnrollmentRequestStatus> = when (this) {
         DRAFT -> setOf(SUBMITTED)
-        SUBMITTED -> setOf(PENDING_APPROVAL, REJECTED, WAITLISTED, EXPIRED)
-        PENDING_APPROVAL -> setOf(APPROVED, REJECTED, WAITLISTED, EXPIRED)
+        SUBMITTED -> setOf(PENDING_APPROVAL, PENDING_CAPACITY_EXCEPTION, REJECTED, WAITLISTED, EXPIRED)
+        PENDING_APPROVAL -> setOf(APPROVED, REJECTED, PENDING_CAPACITY_EXCEPTION, WAITLISTED, EXPIRED)
+        PENDING_CAPACITY_EXCEPTION -> setOf(APPROVED, REJECTED, WAITLISTED, EXPIRED)
         WAITLISTED -> setOf(OFFERED, CANCELLED, EXPIRED)
         OFFERED -> setOf(APPROVED, DECLINED, EXPIRED)
         APPROVED -> setOf(ENROLLED, CANCELLED)
@@ -38,7 +40,7 @@ enum class EnrollmentRequestStatus {
 
     fun isTerminal(): Boolean = allowedTransitions().isEmpty()
 
-    fun isActive(): Boolean = this in setOf(DRAFT, SUBMITTED, PENDING_APPROVAL, WAITLISTED, OFFERED, APPROVED, ENROLLED)
+    fun isActive(): Boolean = this in setOf(DRAFT, SUBMITTED, PENDING_APPROVAL, PENDING_CAPACITY_EXCEPTION, WAITLISTED, OFFERED, APPROVED, ENROLLED)
 }
 
 data class EnrollmentRequest(

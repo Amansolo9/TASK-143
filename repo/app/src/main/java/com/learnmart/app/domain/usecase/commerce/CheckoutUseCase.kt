@@ -1,10 +1,10 @@
 package com.learnmart.app.domain.usecase.commerce
 
-import androidx.room.withTransaction
-import com.learnmart.app.data.local.LearnMartRoomDatabase
+import com.learnmart.app.data.local.TransactionRunner
 import com.learnmart.app.domain.model.*
 import com.learnmart.app.data.local.dao.BlacklistDao
 import com.learnmart.app.domain.repository.*
+import com.learnmart.app.security.DeviceFingerprintProvider
 import com.learnmart.app.security.SessionManager
 import com.learnmart.app.util.AppResult
 import com.learnmart.app.util.IdGenerator
@@ -22,7 +22,8 @@ class CheckoutUseCase @Inject constructor(
     private val pricingEngine: PricingEngine,
     private val blacklistDao: BlacklistDao,
     private val sessionManager: SessionManager,
-    private val database: LearnMartRoomDatabase
+    private val transactionRunner: TransactionRunner,
+    private val deviceFingerprintProvider: DeviceFingerprintProvider
 ) {
     /**
      * Submit an order from the cart. Idempotent via client-generated token.
@@ -168,7 +169,7 @@ class CheckoutUseCase @Inject constructor(
         )
 
         try {
-            database.withTransaction {
+            transactionRunner.runInTransaction {
                 orderRepository.createOrder(order)
 
                 // Order Line Items
@@ -246,6 +247,13 @@ class CheckoutUseCase @Inject constructor(
                     reason = null,
                     timestamp = now
                 ))
+            }
+
+            // Capture device fingerprint for risk tagging (outside transaction, advisory)
+            try {
+                deviceFingerprintProvider.captureIfEnabled("CHECKOUT", "Order", orderId)
+            } catch (_: Exception) {
+                // Fingerprint is advisory — never fail the checkout
             }
         } catch (e: Exception) {
             // Transaction failed - release inventory locks

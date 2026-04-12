@@ -45,49 +45,56 @@ class LoginViewModel @Inject constructor(
         _uiState.update { it.copy(isLoading = true, errorMessage = null) }
 
         viewModelScope.launch(Dispatchers.IO) {
-            val request = LoginRequest(
-                username = currentState.username.trim(),
-                credential = currentState.credential
-            )
+            try {
+                val request = LoginRequest(
+                    username = currentState.username.trim(),
+                    credential = currentState.credential
+                )
 
-            when (val result = loginUseCase(request)) {
-                is AppResult.Success -> {
-                    _uiState.update {
-                        it.copy(isLoading = false, isLoggedIn = true)
+                when (val result = loginUseCase(request)) {
+                    is AppResult.Success -> {
+                        _uiState.update {
+                            it.copy(isLoading = false, isLoggedIn = true)
+                        }
+                    }
+
+                    is AppResult.ValidationError -> {
+                        val message = result.globalErrors.firstOrNull()
+                            ?: result.fieldErrors.values.firstOrNull()
+                            ?: "Validation failed"
+                        _uiState.update {
+                            it.copy(isLoading = false, errorMessage = message)
+                        }
+                    }
+
+                    is AppResult.ConflictError -> {
+                        _uiState.update {
+                            it.copy(isLoading = false, errorMessage = result.message)
+                        }
+                    }
+
+                    is AppResult.PermissionError -> {
+                        _uiState.update {
+                            it.copy(isLoading = false, errorMessage = "Access denied")
+                        }
+                    }
+
+                    is AppResult.NotFoundError -> {
+                        _uiState.update {
+                            it.copy(isLoading = false, errorMessage = "User not found")
+                        }
+                    }
+
+                    is AppResult.SystemError -> {
+                        _uiState.update {
+                            it.copy(isLoading = false, errorMessage = result.message)
+                        }
                     }
                 }
-
-                is AppResult.ValidationError -> {
-                    val message = result.globalErrors.firstOrNull()
-                        ?: result.fieldErrors.values.firstOrNull()
-                        ?: "Validation failed"
-                    _uiState.update {
-                        it.copy(isLoading = false, errorMessage = message)
-                    }
-                }
-
-                is AppResult.ConflictError -> {
-                    _uiState.update {
-                        it.copy(isLoading = false, errorMessage = result.message)
-                    }
-                }
-
-                is AppResult.PermissionError -> {
-                    _uiState.update {
-                        it.copy(isLoading = false, errorMessage = "Access denied")
-                    }
-                }
-
-                is AppResult.NotFoundError -> {
-                    _uiState.update {
-                        it.copy(isLoading = false, errorMessage = "User not found")
-                    }
-                }
-
-                is AppResult.SystemError -> {
-                    _uiState.update {
-                        it.copy(isLoading = false, errorMessage = result.message)
-                    }
+            } catch (e: Exception) {
+                android.util.Log.e("LoginViewModel", "Login crashed: ${e.message}", e)
+                _uiState.update {
+                    it.copy(isLoading = false, errorMessage = "Error: ${e.message}")
                 }
             }
         }

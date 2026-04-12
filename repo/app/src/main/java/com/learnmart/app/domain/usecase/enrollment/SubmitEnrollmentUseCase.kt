@@ -118,7 +118,15 @@ class SubmitEnrollmentUseCase @Inject constructor(
         // Check capacity and route
         val enrolledCount = enrollmentRepository.countActiveEnrollmentsForClass(classOfferingId)
         if (enrolledCount >= classOffering.hardCapacity) {
-            // Over capacity - check waitlist
+            // Over capacity - check policy for exception workflow
+            val allowExceptions = policyRepository.getPolicyBoolValue(
+                PolicyType.ENROLLMENT, "allow_over_capacity_exceptions", true
+            )
+
+            if (allowExceptions) {
+                return routeToCapacityExceptionAtSubmission(request, classOffering)
+            }
+
             val waitlistEnabled = classOffering.waitlistEnabled
             if (waitlistEnabled) {
                 return addToWaitlist(request, classOffering)
@@ -200,6 +208,61 @@ class SubmitEnrollmentUseCase @Inject constructor(
         return AppResult.Success(
             request.copy(status = EnrollmentRequestStatus.WAITLISTED),
             warnings = listOf("Class is at capacity. You have been added to the waitlist.")
+        )
+    }
+
+    private suspend fun routeToCapacityExceptionAtSubmission(
+        request: EnrollmentRequest,
+        classOffering: ClassOffering
+    ): AppResult<EnrollmentRequest> {
+        val now = TimeUtils.nowUtc()
+
+        enrollmentRepository.updateRequestStatus(
+            request.id, EnrollmentRequestStatus.PENDING_CAPACITY_EXCEPTION, request.version
+        )
+
+        enrollmentRepository.createDecisionEvent(EnrollmentDecisionEvent(
+            id = IdGenerator.newId(),
+            enrollmentRequestId = request.id,
+            approvalTaskId = null,
+            decision = "PENDING_CAPACITY_EXCEPTION",
+            decidedBy = "SYSTEM",
+            reason = "Class at capacity (${classOffering.hardCapacity}). Routed to exception review.",
+            timestamp = now
+        ))
+
+        val expiryHours = policyRepository.getPolicyLongValue(
+            PolicyType.ENROLLMENT, "capacity_exception_expiry_hours", 48
+        )
+
+        enrollmentRepository.createApprovalTask(EnrollmentApprovalTask(
+            id = IdGenerator.newId(),
+            enrollmentRequestId = request.id,
+            stepDefinitionId = "CAPACITY_EXCEPTION",
+            assignedToUserId = null,
+            assignedToRoleType = RoleType.REGISTRAR,
+            status = ApprovalTaskStatus.PENDING,
+            decidedBy = null,
+            decidedAt = null,
+            notes = "Over-capacity exception: class at ${classOffering.hardCapacity} seats",
+            createdAt = now,
+            expiresAt = TimeUtils.hoursFromNow(expiryHours)
+        ))
+
+        auditRepository.logStateTransition(StateTransitionLog(
+            id = IdGenerator.newId(),
+            entityType = "EnrollmentRequest",
+            entityId = request.id,
+            fromState = "SUBMITTED",
+            toState = "PENDING_CAPACITY_EXCEPTION",
+            triggeredBy = "SYSTEM",
+            reason = "Over hard capacity. Routed to exception review.",
+            timestamp = now
+        ))
+
+        return AppResult.Success(
+            request.copy(status = EnrollmentRequestStatus.PENDING_CAPACITY_EXCEPTION),
+            warnings = listOf("Class is at capacity. Your request has been routed for over-capacity exception review.")
         )
     }
 

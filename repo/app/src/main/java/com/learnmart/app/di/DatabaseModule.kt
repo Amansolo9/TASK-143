@@ -7,6 +7,7 @@ import android.util.Base64
 import android.util.Log
 import androidx.room.Room
 import androidx.room.RoomDatabase
+import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 import com.learnmart.app.data.local.LearnMartRoomDatabase
 import com.learnmart.app.data.local.dao.AssessmentDao
@@ -48,9 +49,24 @@ object DatabaseModule {
     private const val AES_GCM_TRANSFORMATION = "AES/GCM/NoPadding"
     private const val GCM_TAG_LENGTH = 128
 
+    private val MIGRATION_5_6 = object : Migration(5, 6) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL("""
+                CREATE TABLE IF NOT EXISTS `settlement_payment_updates` (
+                    `idempotency_key` TEXT NOT NULL,
+                    `settlement_row_id` TEXT NOT NULL,
+                    `payment_id` TEXT NOT NULL,
+                    `applied_at` INTEGER NOT NULL,
+                    PRIMARY KEY(`idempotency_key`)
+                )
+            """.trimIndent())
+        }
+    }
+
     @Provides
     @Singleton
     fun provideDatabase(@ApplicationContext context: Context): LearnMartRoomDatabase {
+        SQLiteDatabase.loadLibs(context)
         val passphrase = SQLiteDatabase.getBytes(getOrCreateDatabaseKey(context).toCharArray())
         val factory = SupportFactory(passphrase)
 
@@ -60,15 +76,10 @@ object DatabaseModule {
             "learnmart_encrypted.db"
         )
             .openHelperFactory(factory)
+            .addMigrations(MIGRATION_5_6)
+            .fallbackToDestructiveMigration()
             .addCallback(object : RoomDatabase.Callback() {
                 override fun onDestructiveMigration(db: SupportSQLiteDatabase) {
-                    // This callback fires if a destructive migration were to occur.
-                    // We do NOT enable destructive migration on downgrade. If a
-                    // schema downgrade is detected, Room will throw an
-                    // IllegalStateException rather than silently dropping tables.
-                    // Operator action: restore the database from a backup that
-                    // matches the expected schema version, or run the matching
-                    // app version.
                     Log.w(
                         TAG,
                         "Destructive migration triggered. Data may have been lost. " +
@@ -221,10 +232,17 @@ object DatabaseModule {
      */
     private fun getFallbackDerivedKey(context: Context): String {
         val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-        val existingKey = prefs.getString("fallback_db_key_v2", null)
-        if (existingKey != null) return existingKey
 
-        // Derive from package + random salt so different apps/installs diverge
+        // Check v2 key first (new derivation)
+        val existingV2 = prefs.getString("fallback_db_key_v2", null)
+        if (existingV2 != null) return existingV2
+
+        // Backwards compatibility: honour an existing v1 key so we don't lose
+        // access to a database that was already encrypted with it.
+        val existingV1 = prefs.getString("fallback_db_key", null)
+        if (existingV1 != null) return existingV1
+
+        // First install: derive a stronger key and store under v2
         val salt = java.util.UUID.randomUUID().toString()
         val raw = "${context.packageName}:$salt:${java.util.UUID.randomUUID()}"
         val digest = java.security.MessageDigest.getInstance("SHA-256")
@@ -270,4 +288,9 @@ object DatabaseModule {
 
     @Provides
     fun provideOperationsDao(database: LearnMartRoomDatabase): OperationsDao = database.operationsDao()
+
+    @Provides
+    @Singleton
+    fun provideTransactionRunner(database: LearnMartRoomDatabase): com.learnmart.app.data.local.TransactionRunner =
+        com.learnmart.app.data.local.RoomTransactionRunner(database)
 }

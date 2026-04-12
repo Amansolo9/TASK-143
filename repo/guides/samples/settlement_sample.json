@@ -1,0 +1,26 @@
+[
+  {
+    "external_id": "SET-001",
+    "payment_reference": "pay-001",
+    "amount": "100.00",
+    "tender_type": "CASH",
+    "status": "CLEARED",
+    "transaction_date": "2026-04-01T10:00:00Z"
+  },
+  {
+    "external_id": "SET-002",
+    "payment_reference": "pay-002",
+    "amount": "250.50",
+    "tender_type": "CHECK",
+    "status": "PENDING",
+    "transaction_date": "2026-04-01T11:30:00Z"
+  },
+  {
+    "external_id": "SET-003",
+    "payment_reference": "pay-003",
+    "amount": "75.00",
+    "tender_type": "EXTERNAL_CARD_TERMINAL_REFERENCE",
+    "status": "CLEARED",
+    "transaction_date": "2026-04-02T09:15:00Z"
+  }
+]

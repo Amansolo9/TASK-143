@@ -5,7 +5,4 @@ services:
       dockerfile: Dockerfile
     container_name: learnmart-builder
     volumes:
-      - build-output:/output
-
-volumes:
-  build-output:
+      - ./output:/output

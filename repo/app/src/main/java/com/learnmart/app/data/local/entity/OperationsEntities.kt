@@ -303,12 +303,7 @@ data class DataIntegrityIssueEntity(
     val resolvedBy: String? = null
 )
 
-@Entity(
-    tableName = "settlement_payment_updates",
-    indices = [
-        Index(value = ["idempotency_key"], unique = true)
-    ]
-)
+@Entity(tableName = "settlement_payment_updates")
 data class SettlementPaymentUpdateEntity(
     @PrimaryKey
     @ColumnInfo(name = "idempotency_key")

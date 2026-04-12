@@ -32,9 +32,17 @@ class MainActivity : ComponentActivity() {
 
         // Seed data on first launch and schedule background work
         lifecycleScope.launch(Dispatchers.IO) {
-            seedDataBootstrapper.seedIfEmpty()
+            try {
+                seedDataBootstrapper.seedIfEmpty()
+            } catch (e: Exception) {
+                android.util.Log.e("MainActivity", "Seed failed: ${e.message}", e)
+            }
         }
-        workScheduler.scheduleAllPeriodicWork()
+        try {
+            workScheduler.scheduleAllPeriodicWork()
+        } catch (e: Exception) {
+            android.util.Log.e("MainActivity", "WorkScheduler failed: ${e.message}", e)
+        }
 
         setContent {
             LearnMartTheme {
